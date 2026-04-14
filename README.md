@@ -2,6 +2,7 @@
 📌 Giới thiệu
 Phần mềm giúp quản lý toàn bộ hoạt động của cửa hàng chăm sóc xe ô tô như: quản lý khách hàng, xe, dịch vụ, lịch hẹn và thanh toán. Mục tiêu là tối ưu quy trình làm việc, tiết kiệm thời gian và tăng hiệu quả kinh doanh.
 
+
 🎯 Mục tiêu hệ thống
 Quản lý thông tin khách hàng và xe
 Quản lý các dịch vụ chăm sóc xe
