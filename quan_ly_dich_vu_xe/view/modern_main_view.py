@@ -1,10 +1,11 @@
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 from datetime import datetime, timedelta
 from .modern_khach_hang_view import ModernKhachHangView
 from .modern_xe_view import ModernXeView
 from .modern_dich_vu_view import ModernDichVuView
 from .modern_hoa_don_view import ModernHoaDonView
+from view.login_view import LoginView
 
 # Cài đặt theme
 ctk.set_appearance_mode("dark")
@@ -21,12 +22,16 @@ class ModernMainView:
         self.root.title("AutoCare Pro - Quản lý dịch vụ chăm sóc xe ô tô")
         self.root.geometry("1400x800")
         
+        # Lấy thông tin user từ controllers
+        self.current_user = controllers.get('user', None)
+        
         # Tạo layout
         self.setup_ui()
         
         # Hiển thị dashboard mặc định
         self.show_dashboard()
         
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.root.mainloop()
     
     def setup_ui(self):
@@ -123,20 +128,37 @@ class ModernMainView:
         )
         avatar_label.pack()
         
-        user_name = ctk.CTkLabel(
-            user_frame,
-            text="Admin User",
-            font=ctk.CTkFont(size=14, weight="bold")
-        )
-        user_name.pack()
-        
-        user_role = ctk.CTkLabel(
-            user_frame,
-            text="Quản trị viên",
-            font=ctk.CTkFont(size=12),
-            text_color="#888888"
-        )
-        user_role.pack()
+        # Hiển thị thông tin user nếu có
+        if self.current_user:
+            user_name = ctk.CTkLabel(
+                user_frame,
+                text=self.current_user.get('ho_ten', 'Admin User'),
+                font=ctk.CTkFont(size=14, weight="bold")
+            )
+            user_name.pack()
+            
+            user_role = ctk.CTkLabel(
+                user_frame,
+                text="Quản trị viên" if self.current_user.get('vai_tro') == 'admin' else "Nhân viên",
+                font=ctk.CTkFont(size=12),
+                text_color="#888888"
+            )
+            user_role.pack()
+        else:
+            user_name = ctk.CTkLabel(
+                user_frame,
+                text="Admin User",
+                font=ctk.CTkFont(size=14, weight="bold")
+            )
+            user_name.pack()
+            
+            user_role = ctk.CTkLabel(
+                user_frame,
+                text="Quản trị viên",
+                font=ctk.CTkFont(size=12),
+                text_color="#888888"
+            )
+            user_role.pack()
         
         logout_btn = ctk.CTkButton(
             user_frame,
@@ -213,7 +235,11 @@ class ModernMainView:
         stats_frame.pack(fill="x", pady=20)
         
         # Lấy dữ liệu thống kê
-        total_kh = self.controllers['khach_hang'].model.get_total()
+        try:
+            total_kh = self.controllers['khach_hang'].model.get_total()
+        except:
+            total_kh = len(self.controllers['khach_hang'].get_all())
+        
         total_xe = len(self.controllers['xe'].get_all())
         total_dv = len(self.controllers['dich_vu'].get_all())
         total_hd = len(self.controllers['hoa_don'].get_all())
@@ -238,14 +264,18 @@ class ModernMainView:
         )
         chart_title.pack(pady=20)
         
-        # Lấy dữ liệu doanh thu
-        thong_ke = self.controllers['hoa_don'].thong_ke(
-            (datetime.now().date() - timedelta(days=7)).strftime("%Y-%m-%d"),
-            datetime.now().strftime("%Y-%m-%d")
-        )
+        # Lấy dữ liệu doanh thu - Lấy tất cả hóa đơn (bao gồm cả chưa hoàn thành)
+        try:
+            thong_ke = self.controllers['hoa_don'].thong_ke(
+                (datetime.now().date() - timedelta(days=7)).strftime("%Y-%m-%d"),
+                datetime.now().strftime("%Y-%m-%d"),
+                include_all_status=True  # THÊM THAM SỐ NÀY
+            )
+        except:
+            thong_ke = []
         
         # Tạo frame cho biểu đồ
-        if thong_ke:
+        if thong_ke and len(thong_ke) > 0:
             chart_canvas = ctk.CTkFrame(chart_frame, fg_color="transparent")
             chart_canvas.pack(pady=20, padx=40, fill="x")
             
@@ -255,7 +285,7 @@ class ModernMainView:
                 col_frame = ctk.CTkFrame(chart_canvas, fg_color="transparent")
                 col_frame.pack(side="left", expand=True, fill="x")
                 
-                height = (stat['doanh_thu'] / max_doanh_thu) * 150
+                height = float(stat['doanh_thu']) / float(max_doanh_thu) * 150
                 bar = ctk.CTkFrame(
                     col_frame,
                     height=height,
@@ -398,8 +428,56 @@ class ModernMainView:
         stats_frame = ctk.CTkScrollableFrame(self.content_frame, fg_color="transparent")
         stats_frame.pack(fill="both", expand=True)
         
+        # === Thêm bộ lọc trạng thái ===
+        filter_frame = ctk.CTkFrame(stats_frame, fg_color="#1f1f1f", corner_radius=15)
+        filter_frame.pack(fill="x", pady=10, padx=10)
+        
+        filter_title = ctk.CTkLabel(
+            filter_frame,
+            text="🔍 Bộ lọc thống kê",
+            font=ctk.CTkFont(size=16, weight="bold")
+        )
+        filter_title.pack(pady=10)
+        
+        filter_row = ctk.CTkFrame(filter_frame, fg_color="transparent")
+        filter_row.pack(pady=10)
+        
+        ctk.CTkLabel(filter_row, text="Trạng thái:", font=ctk.CTkFont(size=13)).pack(side="left", padx=10)
+        
+        status_filter_var = ctk.StringVar(value="all")
+        
+        status_options = [
+            ("📊 Tất cả", "all"),
+            ("✅ Hoàn thành", "hoan_thanh"),
+            ("🟡 Đang xử lý", "dang_xu_ly"),
+            ("🔴 Đã hủy", "da_huy")
+        ]
+        
+        for text, value in status_options:
+            radio = ctk.CTkRadioButton(
+                filter_row, 
+                text=text, 
+                variable=status_filter_var, 
+                value=value,
+                command=lambda: self.load_thong_ke_data(stats_frame, status_filter_var)
+            )
+            radio.pack(side="left", padx=15)
+        
+        # Khung hiển thị kết quả thống kê
+        self.thong_ke_container = ctk.CTkFrame(stats_frame, fg_color="transparent")
+        self.thong_ke_container.pack(fill="both", expand=True, pady=10)
+        
+        # Load dữ liệu ban đầu
+        self.load_thong_ke_data(stats_frame, status_filter_var)
+
+    def load_thong_ke_data(self, parent_frame, status_filter_var):
+        """Tải dữ liệu thống kê theo bộ lọc"""
+        # Xóa nội dung cũ
+        for widget in self.thong_ke_container.winfo_children():
+            widget.destroy()
+        
         # Thống kê theo tháng
-        monthly_frame = ctk.CTkFrame(stats_frame, fg_color="#1f1f1f", corner_radius=15)
+        monthly_frame = ctk.CTkFrame(self.thong_ke_container, fg_color="#1f1f1f", corner_radius=15)
         monthly_frame.pack(fill="x", pady=10, padx=10)
         
         monthly_title = ctk.CTkLabel(
@@ -409,56 +487,120 @@ class ModernMainView:
         )
         monthly_title.pack(pady=15)
         
-        # Lấy thống kê 6 tháng gần nhất
-        from datetime import datetime, timedelta
+        # Lấy thống kê 12 tháng gần nhất
         end_date = datetime.now()
-        start_date = end_date - timedelta(days=180)
+        start_date = end_date - timedelta(days=365)
         
-        stats = self.controllers['hoa_don'].thong_ke(
-            start_date.strftime("%Y-%m-%d"),
-            end_date.strftime("%Y-%m-%d")
-        )
+        status_filter = status_filter_var.get()
+        include_all = (status_filter == "all")
         
-        if stats:
+        try:
+            # Lấy dữ liệu thống kê
+            if include_all:
+                # Lấy tất cả hóa đơn
+                query = """SELECT DATE(ngay_lap) as ngay, 
+                                COUNT(*) as so_luong, 
+                                COALESCE(SUM(tong_tien), 0) as doanh_thu,
+                                trang_thai
+                        FROM hoa_don 
+                        WHERE DATE(ngay_lap) BETWEEN %s AND %s
+                        GROUP BY DATE(ngay_lap), trang_thai
+                        ORDER BY ngay DESC"""
+                stats = self.controllers['hoa_don'].model.db.fetch_all(query, (start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")))
+            else:
+                # Chỉ lấy theo trạng thái cụ thể
+                query = """SELECT DATE(ngay_lap) as ngay, 
+                                COUNT(*) as so_luong, 
+                                COALESCE(SUM(tong_tien), 0) as doanh_thu
+                        FROM hoa_don 
+                        WHERE trang_thai = %s
+                        AND DATE(ngay_lap) BETWEEN %s AND %s
+                        GROUP BY DATE(ngay_lap)
+                        ORDER BY ngay DESC"""
+                stats = self.controllers['hoa_don'].model.db.fetch_all(query, (status_filter, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")))
+        except Exception as e:
+            print(f"Lỗi thống kê: {e}")
+            stats = []
+        
+        if stats and len(stats) > 0:
             # Tạo bảng thống kê
-            columns = ("Tháng", "Số lượng hóa đơn", "Doanh thu", "Trung bình/đơn")
-            tree = ttk.Treeview(monthly_frame, columns=columns, show="headings", height=10)
-            
-            for col in columns:
-                tree.heading(col, text=col)
-                tree.column(col, width=200)
-            
-            # Nhóm theo tháng
-            monthly_data = {}
-            for stat in stats:
-                if isinstance(stat['ngay'], datetime):
-                    month_key = stat['ngay'].strftime("%m/%Y")
-                    if month_key not in monthly_data:
-                        monthly_data[month_key] = {'count': 0, 'revenue': 0}
-                    monthly_data[month_key]['count'] += stat['so_luong']
-                    monthly_data[month_key]['revenue'] += stat['doanh_thu']
-            
-            for month, data in sorted(monthly_data.items()):
-                avg = data['revenue'] / data['count'] if data['count'] > 0 else 0
-                tree.insert("", "end", values=(
-                    month,
-                    data['count'],
-                    f"{data['revenue']:,.0f} VNĐ",
-                    f"{avg:,.0f} VNĐ"
-                ))
+            if include_all:
+                columns = ("Tháng", "Trạng thái", "Số lượng", "Doanh thu")
+                tree = ttk.Treeview(monthly_frame, columns=columns, show="headings", height=12)
+                
+                for col in columns:
+                    tree.heading(col, text=col)
+                    tree.column(col, width=180, anchor="center")
+                
+                # Nhóm theo tháng và trạng thái
+                status_names = {
+                    'dang_xu_ly': '🟡 Đang xử lý',
+                    'hoan_thanh': '✅ Hoàn thành',
+                    'da_huy': '🔴 Đã hủy'
+                }
+                
+                for stat in stats:
+                    ngay = stat.get('ngay')
+                    if ngay and isinstance(ngay, datetime):
+                        month_key = ngay.strftime("%m/%Y")
+                        status_text = status_names.get(stat.get('trang_thai'), stat.get('trang_thai'))
+                        tree.insert("", "end", values=(
+                            month_key,
+                            status_text,
+                            stat.get('so_luong', 0),
+                            f"{stat.get('doanh_thu', 0):,.0f} VNĐ"
+                        ))
+            else:
+                columns = ("Tháng", "Số lượng hóa đơn", "Doanh thu", "Trung bình/đơn")
+                tree = ttk.Treeview(monthly_frame, columns=columns, show="headings", height=10)
+                
+                for col in columns:
+                    tree.heading(col, text=col)
+                    tree.column(col, width=200, anchor="center")
+                
+                # Nhóm theo tháng
+                monthly_data = {}
+                for stat in stats:
+                    ngay = stat.get('ngay')
+                    if ngay and isinstance(ngay, datetime):
+                        month_key = ngay.strftime("%m/%Y")
+                        if month_key not in monthly_data:
+                            monthly_data[month_key] = {'count': 0, 'revenue': 0}
+                        monthly_data[month_key]['count'] += stat.get('so_luong', 0)
+                        monthly_data[month_key]['revenue'] += stat.get('doanh_thu', 0)
+                
+                for month, data in sorted(monthly_data.items()):
+                    avg = data['revenue'] / data['count'] if data['count'] > 0 else 0
+                    tree.insert("", "end", values=(
+                        month,
+                        data['count'],
+                        f"{data['revenue']:,.0f} VNĐ",
+                        f"{avg:,.0f} VNĐ"
+                    ))
             
             tree.pack(fill="both", expand=True, padx=10, pady=10)
+            
+            # Tổng doanh thu
+            total_revenue = sum([s.get('doanh_thu', 0) for s in stats]) if include_all else sum([data['revenue'] for data in monthly_data.values()])
+            total_label = ctk.CTkLabel(
+                monthly_frame,
+                text=f"💰 Tổng doanh thu: {total_revenue:,.0f} VNĐ",
+                font=ctk.CTkFont(size=14, weight="bold"),
+                text_color="#00c853"
+            )
+            total_label.pack(pady=10)
+            
         else:
             no_data_label = ctk.CTkLabel(
                 monthly_frame,
-                text="Chưa có dữ liệu thống kê",
+                text="📭 Không có dữ liệu thống kê cho bộ lọc này",
                 font=ctk.CTkFont(size=14),
                 text_color="#888888"
             )
             no_data_label.pack(pady=50)
         
         # Top dịch vụ
-        top_services_frame = ctk.CTkFrame(stats_frame, fg_color="#1f1f1f", corner_radius=15)
+        top_services_frame = ctk.CTkFrame(self.thong_ke_container, fg_color="#1f1f1f", corner_radius=15)
         top_services_frame.pack(fill="x", pady=10, padx=10)
         
         top_title = ctk.CTkLabel(
@@ -468,13 +610,40 @@ class ModernMainView:
         )
         top_title.pack(pady=15)
         
-        top_info = ctk.CTkLabel(
-            top_services_frame,
-            text="Tính năng đang phát triển",
-            font=ctk.CTkFont(size=14),
-            text_color="#888888"
-        )
-        top_info.pack(pady=30)
+        # Lấy top dịch vụ
+        try:
+            top_query = """
+                SELECT dv.ten_dich_vu, COUNT(*) as so_lan_su_dung, SUM(ct.so_luong) as tong_so_luong
+                FROM chi_tiet_hoa_don ct
+                JOIN dich_vu dv ON ct.id_dich_vu = dv.id
+                GROUP BY ct.id_dich_vu
+                ORDER BY so_lan_su_dung DESC
+                LIMIT 5
+            """
+            top_services = self.controllers['hoa_don'].model.db.fetch_all(top_query)
+            
+            if top_services and len(top_services) > 0:
+                top_cols = ("Tên dịch vụ", "Số lần sử dụng", "Tổng số lượng")
+                top_tree = ttk.Treeview(top_services_frame, columns=top_cols, show="headings", height=5)
+                
+                for col in top_cols:
+                    top_tree.heading(col, text=col)
+                    top_tree.column(col, width=200, anchor="center")
+                
+                for ts in top_services:
+                    top_tree.insert("", "end", values=(
+                        ts.get('ten_dich_vu', 'N/A'),
+                        ts.get('so_lan_su_dung', 0),
+                        ts.get('tong_so_luong', 0)
+                    ))
+                
+                top_tree.pack(fill="both", expand=True, padx=10, pady=10)
+            else:
+                ctk.CTkLabel(top_services_frame, text="Chưa có dữ liệu về dịch vụ", 
+                            font=ctk.CTkFont(size=14), text_color="#888888").pack(pady=30)
+        except Exception as e:
+            ctk.CTkLabel(top_services_frame, text=f"Lỗi tải dữ liệu: {e}", 
+                        font=ctk.CTkFont(size=14), text_color="#888888").pack(pady=30)
     
     # ==================== CÀI ĐẶT ====================
     
@@ -588,7 +757,34 @@ class ModernMainView:
             self.show_dashboard()
     
     def logout(self):
-        """Đăng xuất"""
+        """Đăng xuất và quay lại màn hình đăng nhập"""
         if messagebox.askyesno("Xác nhận", "Bạn có chắc muốn đăng xuất?"):
+            # Đóng cửa sổ hiện tại
             self.root.destroy()
-            # Có thể mở lại màn hình login ở đây
+            
+            # Mở lại màn hình đăng nhập
+            def start_app(user):
+                # Khởi tạo lại controllers
+                from controller.khach_hang_controller import KhachHangController
+                from controller.xe_controller import XeController
+                from controller.dich_vu_controller import DichVuController
+                from controller.hoa_don_controller import HoaDonController
+                
+                controllers = {
+                    'khach_hang': KhachHangController(),
+                    'xe': XeController(),
+                    'dich_vu': DichVuController(),
+                    'hoa_don': HoaDonController(),
+                    'user': user
+                }
+                
+                # Mở lại main view
+                ModernMainView(controllers)
+            
+            # Hiển thị lại màn hình login
+            LoginView(start_app)
+    
+    def on_closing(self):
+        """Xử lý khi đóng cửa sổ"""
+        if messagebox.askyesno("Thoát", "Bạn có chắc muốn thoát chương trình?"):
+            self.root.destroy()

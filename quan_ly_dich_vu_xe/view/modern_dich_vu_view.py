@@ -1,12 +1,11 @@
 import customtkinter as ctk
-from tkinter import messagebox
-import customtkinter as ctk
-from tkinter import messagebox, ttk  # Thêm ttk
+from tkinter import messagebox, ttk
 
 class ModernDichVuView:
     def __init__(self, parent, controller):
         self.parent = parent
         self.controller = controller
+        self.current_service_id = None
         
         self.setup_ui()
         self.load_data()
@@ -45,6 +44,7 @@ class ModernDichVuView:
             height=40
         )
         self.search_entry.pack(side="left", padx=10)
+        self.search_entry.bind("<Return>", lambda e: self.search())  # Thêm Enter key
         
         self.search_btn = ctk.CTkButton(
             search_frame,
@@ -93,16 +93,15 @@ class ModernDichVuView:
         
         self.table_rows = []
     
-    def load_data(self):
-        """Tải danh sách dịch vụ"""
+    def render_table(self, data_list):
+        """Vẽ lại bảng với dữ liệu mới"""
+        # Xóa dữ liệu cũ
         for row in self.table_rows:
             for widget in row:
                 widget.destroy()
         self.table_rows.clear()
         
-        dich_vus = self.controller.get_all()
-        
-        for row_idx, dv in enumerate(dich_vus, start=2):
+        for row_idx, dv in enumerate(data_list, start=2):
             row_widgets = []
             
             # ID
@@ -179,6 +178,11 @@ class ModernDichVuView:
             row_widgets.append(action_frame)
             self.table_rows.append(row_widgets)
     
+    def load_data(self):
+        """Tải danh sách dịch vụ"""
+        dich_vus = self.controller.get_all()
+        self.render_table(dich_vus)
+    
     def setup_form(self):
         """Form nhập liệu dịch vụ"""
         self.form_frame = ctk.CTkFrame(self.main_frame, fg_color="#1f1f1f", corner_radius=15)
@@ -237,8 +241,6 @@ class ModernDichVuView:
             corner_radius=10
         )
         self.cancel_btn.pack(side="left", padx=10)
-        
-        self.current_service_id = None
     
     def show_add_form(self):
         """Hiển thị form thêm dịch vụ"""
@@ -260,12 +262,6 @@ class ModernDichVuView:
         
         # Cập nhật UI
         self.main_frame.update_idletasks()
-
-    def hide_form(self):
-        """Ẩn form và hiện lại bảng"""
-        print("Đang ẩn form")
-        self.form_frame.pack_forget()
-        self.table_frame.pack(fill="both", expand=True, pady=(0, 20))
     
     def show_edit_form(self, service):
         """Hiển thị form sửa dịch vụ"""
@@ -282,12 +278,19 @@ class ModernDichVuView:
         self.form_entries['mo_ta'].insert(0, service['mo_ta'] or "")
         
         self.form_title.configure(text="✏️ Sửa thông tin dịch vụ")
-        self.form_frame.pack(fill="x", pady=(20, 0))
+        
+        # Ẩn table frame
+        self.table_frame.pack_forget()
+        
+        # Hiển thị form
+        self.form_frame.pack(fill="x", pady=(0, 20))
         self.form_frame.lift()
     
     def hide_form(self):
-        """Ẩn form"""
+        """Ẩn form và hiện lại bảng"""
+        print("Đang ẩn form")
         self.form_frame.pack_forget()
+        self.table_frame.pack(fill="both", expand=True, pady=(0, 20))
     
     def save_service(self):
         """Lưu dịch vụ"""
@@ -304,7 +307,7 @@ class ModernDichVuView:
             return
         
         try:
-            don_gia = float(don_gia_str)
+            don_gia = float(don_gia_str.replace(',', ''))  # Cho phép nhập dấu phẩy
             thoi_gian = int(thoi_gian_str) if thoi_gian_str else None
         except ValueError:
             messagebox.showerror("Lỗi", "Đơn giá phải là số, thời gian phải là số nguyên")
@@ -339,8 +342,14 @@ class ModernDichVuView:
                 messagebox.showerror("Lỗi", "Xóa dịch vụ thất bại")
     
     def search(self):
-        """Tìm kiếm dịch vụ"""
+        """Tìm kiếm dịch vụ và cập nhật bảng"""
         keyword = self.search_entry.get().strip()
         if keyword:
             results = self.controller.search(keyword)
-            messagebox.showinfo("Kết quả", f"Tìm thấy {len(results)} dịch vụ")
+            self.render_table(results)  # Cập nhật bảng với kết quả tìm kiếm
+            if len(results) == 0:
+                messagebox.showinfo("Kết quả", "Không tìm thấy dịch vụ nào")
+            else:
+                messagebox.showinfo("Kết quả", f"Tìm thấy {len(results)} dịch vụ")
+        else:
+            self.load_data()  # Nếu không có từ khóa, tải lại toàn bộ

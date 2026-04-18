@@ -48,3 +48,18 @@ class KhachHangModel:
         query = "SELECT COUNT(*) as total FROM khach_hang"
         result = self.db.fetch_one(query)
         return result['total'] if result else 0
+    
+    def get_cars_by_customer(self, customer_id):
+        """Lấy danh sách xe theo ID khách hàng"""
+        try:
+            query = """SELECT x.*, kh.ho_ten as ten_chu_xe 
+                       FROM xe x
+                       LEFT JOIN khach_hang kh ON x.id_khach_hang = kh.id
+                       WHERE x.id_khach_hang = %s
+                       ORDER BY x.id DESC"""
+            result = self.db.fetch_all(query, (customer_id,))
+            print(f"DEBUG: Tìm thấy {len(result) if result else 0} xe cho KH ID {customer_id}")
+            return result if result else []
+        except Exception as e:
+            print(f"Lỗi truy vấn xe theo khách hàng: {e}")
+            return []

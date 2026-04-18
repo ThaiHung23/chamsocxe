@@ -93,24 +93,53 @@ class HoaDonModel:
         affected = self.db.delete(query, (id,))
         return affected > 0
     
-    def get_thong_ke(self, from_date=None, to_date=None):
+    def get_thong_ke(self, from_date=None, to_date=None, include_all_status=False):
+        """Lấy thống kê doanh thu
+        
+        Args:
+            from_date: Ngày bắt đầu
+            to_date: Ngày kết thúc
+            include_all_status: Nếu True thì lấy tất cả trạng thái, False chỉ lấy hoan_thanh
+        """
         if from_date and to_date:
-            query = """SELECT DATE(ngay_lap) as ngay, 
-                              COUNT(*) as so_luong, 
-                              COALESCE(SUM(tong_tien), 0) as doanh_thu 
-                       FROM hoa_don 
-                       WHERE trang_thai = 'hoan_thanh' 
-                       AND DATE(ngay_lap) BETWEEN %s AND %s
-                       GROUP BY DATE(ngay_lap)
-                       ORDER BY ngay DESC"""
-            return self.db.fetch_all(query, (from_date, to_date))
+            if include_all_status:
+                # Lấy tất cả hóa đơn (kể cả chưa hoàn thành)
+                query = """SELECT DATE(ngay_lap) as ngay, 
+                                COUNT(*) as so_luong, 
+                                COALESCE(SUM(tong_tien), 0) as doanh_thu 
+                        FROM hoa_don 
+                        WHERE DATE(ngay_lap) BETWEEN %s AND %s
+                        GROUP BY DATE(ngay_lap)
+                        ORDER BY ngay DESC"""
+                return self.db.fetch_all(query, (from_date, to_date))
+            else:
+                # Chỉ lấy hóa đơn hoàn thành
+                query = """SELECT DATE(ngay_lap) as ngay, 
+                                COUNT(*) as so_luong, 
+                                COALESCE(SUM(tong_tien), 0) as doanh_thu 
+                        FROM hoa_don 
+                        WHERE trang_thai = 'hoan_thanh' 
+                        AND DATE(ngay_lap) BETWEEN %s AND %s
+                        GROUP BY DATE(ngay_lap)
+                        ORDER BY ngay DESC"""
+                return self.db.fetch_all(query, (from_date, to_date))
         else:
-            query = """SELECT DATE(ngay_lap) as ngay, 
-                              COUNT(*) as so_luong, 
-                              COALESCE(SUM(tong_tien), 0) as doanh_thu 
-                       FROM hoa_don 
-                       WHERE trang_thai = 'hoan_thanh'
-                       GROUP BY DATE(ngay_lap)
-                       ORDER BY ngay DESC
-                       LIMIT 30"""
-            return self.db.fetch_all(query)
+            if include_all_status:
+                query = """SELECT DATE(ngay_lap) as ngay, 
+                                COUNT(*) as so_luong, 
+                                COALESCE(SUM(tong_tien), 0) as doanh_thu 
+                        FROM hoa_don 
+                        GROUP BY DATE(ngay_lap)
+                        ORDER BY ngay DESC
+                        LIMIT 30"""
+                return self.db.fetch_all(query)
+            else:
+                query = """SELECT DATE(ngay_lap) as ngay, 
+                                COUNT(*) as so_luong, 
+                                COALESCE(SUM(tong_tien), 0) as doanh_thu 
+                        FROM hoa_don 
+                        WHERE trang_thai = 'hoan_thanh'
+                        GROUP BY DATE(ngay_lap)
+                        ORDER BY ngay DESC
+                        LIMIT 30"""
+                return self.db.fetch_all(query)

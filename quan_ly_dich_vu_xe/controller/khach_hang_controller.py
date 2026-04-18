@@ -40,3 +40,11 @@ class KhachHangController:
         except Exception as e:
             print(f"Lỗi xóa: {e}")
             return False
+    
+    def get_cars_by_customer(self, customer_id):
+        """Lấy danh sách xe dựa trên ID của khách hàng"""
+        try:
+            return self.model.get_cars_by_customer(customer_id)
+        except Exception as e:
+            print(f"Lỗi lấy xe theo khách hàng: {e}")
+            return []

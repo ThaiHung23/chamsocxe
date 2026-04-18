@@ -1,177 +1,208 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
+import customtkinter as ctk
+from tkinter import messagebox, ttk
 
-class XeView(ttk.Frame):
-    def __init__(self, parent, controller):
-        super().__init__(parent)
+class ModernXeView:
+    def __init__(self, parent, controller, khach_hang_controller, on_refresh_callback=None):
+        self.parent = parent
         self.controller = controller
-        self.khach_hang_controller = None  # Sẽ được set từ main
+        self.khach_hang_controller = khach_hang_controller
+        self.on_refresh = on_refresh_callback
+        
+        # Biến quản lý trạng thái
+        self.current_car_id = None
+        self.all_cars_data = []  # Lưu trữ dữ liệu gốc để search/filter
+        
         self.setup_ui()
         self.load_data()
-    
+
     def setup_ui(self):
-        # Frame tìm kiếm
-        search_frame = ttk.LabelFrame(self, text="Tìm kiếm")
-        search_frame.pack(fill="x", padx=5, pady=5)
+        """Khởi tạo giao diện chính"""
+        self.main_frame = ctk.CTkFrame(self.parent, fg_color="transparent")
+        self.main_frame.pack(fill="both", expand=True, padx=20, pady=10)
+
+        # 1. Toolbar (Tìm kiếm & Nút thêm)
+        self.setup_toolbar()
+
+        # 2. Container nội dung (Chứa Bảng hoặc Form)
+        self.content_container = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.content_container.pack(fill="both", expand=True)
+
+        self.setup_table()
+        self.setup_form()
+
+    def setup_toolbar(self):
+        toolbar = ctk.CTkFrame(self.main_frame, fg_color="#1f1f1f", corner_radius=10)
+        toolbar.pack(fill="x", pady=(0, 15))
+
+        # Nhóm bên trái: Thêm mới
+        left_f = ctk.CTkFrame(toolbar, fg_color="transparent")
+        left_f.pack(side="left", padx=10, pady=10)
         
-        ttk.Label(search_frame, text="Từ khóa:").pack(side="left", padx=5)
-        self.search_var = tk.StringVar()
-        self.search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=30)
-        self.search_entry.pack(side="left", padx=5)
+        ctk.CTkButton(left_f, text="➕ Thêm xe mới", command=self.show_add_form,
+                      fg_color="#4a9eff", hover_color="#357ae8", height=38).pack(side="left", padx=5)
         
-        ttk.Button(search_frame, text="Tìm kiếm", command=self.search).pack(side="left", padx=5)
-        ttk.Button(search_frame, text="Làm mới", command=self.load_data).pack(side="left", padx=5)
+        ctk.CTkButton(left_f, text="🔄 Làm mới", command=self.load_data,
+                      fg_color="#757575", width=100, height=38).pack(side="left", padx=5)
+
+        # Nhóm bên phải: Tìm kiếm
+        search_f = ctk.CTkFrame(toolbar, fg_color="#2b2b2b", corner_radius=8)
+        search_f.pack(side="right", padx=10)
+
+        self.search_entry = ctk.CTkEntry(search_f, placeholder_text="Biển số, Hiệu xe...", width=250, border_width=0)
+        self.search_entry.pack(side="left", padx=10, pady=5)
+        self.search_entry.bind("<Return>", lambda e: self.search())
+
+        ctk.CTkButton(search_f, text="Tìm kiếm", command=self.search, width=80, height=30).pack(side="left", padx=5)
+
+    def setup_table(self):
+        """Bảng hiển thị xe sử dụng CTkScrollableFrame để hiển thị tốt hơn"""
+        self.table_frame = ctk.CTkScrollableFrame(self.content_container, fg_color="#1f1f1f", corner_radius=10)
+        self.table_frame.pack(fill="both", expand=True)
+
+        headers = ["ID", "Biển số", "Hiệu xe", "Model", "Màu sắc", "Năm SX", "Chủ xe", "Thao tác"]
+        # Tỉ lệ chiều rộng các cột
+        self.col_widths = [50, 110, 130, 110, 90, 80, 140, 120]
+
+        for i, (header, width) in enumerate(zip(headers, self.col_widths)):
+            lbl = ctk.CTkLabel(self.table_frame, text=header, font=ctk.CTkFont(size=13, weight="bold"),
+                               text_color="#4a9eff", width=width, anchor="w")
+            lbl.grid(row=0, column=i, padx=10, pady=12)
+
+        self.rows_widgets = []
+
+    def setup_form(self):
+        """Form nhập liệu - Ẩn mặc định"""
+        self.form_frame = ctk.CTkFrame(self.content_container, fg_color="#1f1f1f", corner_radius=15)
         
-        # Frame danh sách
-        list_frame = ttk.LabelFrame(self, text="Danh sách xe")
-        list_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        self.form_title = ctk.CTkLabel(self.form_frame, text="Thông tin xe", font=ctk.CTkFont(size=20, weight="bold"))
+        self.form_title.pack(pady=20)
+
+        fields = [
+            ("Biển số *", "bien_so"), ("Hiệu xe *", "hieu_xe"), 
+            ("Model", "model"), ("Màu sắc", "mau_sac"), 
+            ("Năm SX", "nam_sx"), ("ID Chủ xe *", "id_khach_hang")
+        ]
         
-        # Treeview
-        columns = ("ID", "Biển số", "Hiệu xe", "Model", "Màu sắc", "Năm SX", "Chủ xe")
-        self.tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=15)
-        
-        for col in columns:
-            self.tree.heading(col, text=col)
-            self.tree.column(col, width=120)
-        
-        scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scrollbar.set)
-        
-        self.tree.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        # Frame chức năng
-        btn_frame = ttk.Frame(self)
-        btn_frame.pack(fill="x", padx=5, pady=5)
-        
-        ttk.Button(btn_frame, text="Thêm mới", command=self.open_add_window).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Sửa", command=self.open_edit_window).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Xóa", command=self.delete).pack(side="left", padx=5)
-        
-        self.tree.bind("<Double-Button-1>", self.open_edit_window)
-    
+        self.entries = {}
+        for label, key in fields:
+            f = ctk.CTkFrame(self.form_frame, fg_color="transparent")
+            f.pack(fill="x", padx=100, pady=8)
+            ctk.CTkLabel(f, text=label, width=120, anchor="w").pack(side="left")
+            entry = ctk.CTkEntry(f, width=300, height=35)
+            entry.pack(side="left", padx=10)
+            self.entries[key] = entry
+
+        # Nút chức năng Form
+        btn_f = ctk.CTkFrame(self.form_frame, fg_color="transparent")
+        btn_f.pack(pady=30)
+        ctk.CTkButton(btn_f, text="💾 Lưu xe", command=self.save_car, fg_color="#00c853", width=120).pack(side="left", padx=10)
+        ctk.CTkButton(btn_f, text="❌ Hủy", command=self.hide_form, fg_color="#d32f2f", width=120).pack(side="left", padx=10)
+
+    # --- HÀM LOGIC XỬ LÝ DỮ LIỆU ---
+
+    def render_table(self, data_list):
+        """Vẽ lại bảng dữ liệu"""
+        # Xóa các widget cũ
+        for widgets in self.rows_widgets:
+            for w in widgets: w.destroy()
+        self.rows_widgets.clear()
+
+        for i, xe in enumerate(data_list, start=1):
+            current_row = []
+            display_data = [
+                xe['id'], xe['bien_so'], xe['hieu_xe'], 
+                xe.get('model', '—'), xe.get('mau_sac', '—'),
+                xe.get('nam_sx', '—'), xe.get('ten_chu_xe', 'N/A')
+            ]
+
+            for col, text in enumerate(display_data):
+                color = "#ff9800" if col == 1 else "white" # Highlight biển số
+                l = ctk.CTkLabel(self.table_frame, text=str(text), text_color=color, width=self.col_widths[col], anchor="w")
+                l.grid(row=i, column=col, padx=10, pady=8)
+                current_row.append(l)
+
+            # Cột thao tác
+            act_f = ctk.CTkFrame(self.table_frame, fg_color="transparent")
+            act_f.grid(row=i, column=7, padx=5)
+            
+            ctk.CTkButton(act_f, text="✏️", width=35, fg_color="#ff9800", command=lambda x=xe: self.show_edit_form(x)).pack(side="left", padx=2)
+            ctk.CTkButton(act_f, text="🗑️", width=35, fg_color="#d32f2f", command=lambda x=xe: self.delete_car(x['id'])).pack(side="left", padx=2)
+            
+            current_row.append(act_f)
+            self.rows_widgets.append(current_row)
+
     def load_data(self):
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-        
-        xe_list = self.controller.get_all()
-        for xe in xe_list:
-            self.tree.insert("", "end", values=(
-                xe['id'],
-                xe['bien_so'],
-                xe['hieu_xe'],
-                xe['model'],
-                xe['mau_sac'],
-                xe['nam_sx'],
-                xe.get('ten_chu_xe', 'N/A')
-            ))
-    
+        """Tải dữ liệu từ database"""
+        self.all_cars_data = self.controller.get_all()
+        self.render_table(self.all_cars_data)
+
     def search(self):
-        keyword = self.search_var.get()
-        if keyword:
-            for item in self.tree.get_children():
-                self.tree.delete(item)
-            
-            results = self.controller.search(keyword)
-            for xe in results:
-                self.tree.insert("", "end", values=(
-                    xe['id'],
-                    xe['bien_so'],
-                    xe['hieu_xe'],
-                    xe['model'],
-                    xe['mau_sac'],
-                    xe['nam_sx'],
-                    xe.get('ten_chu_xe', 'N/A')
-                ))
-    
-    def open_add_window(self):
-        self.open_form_window("Thêm xe mới")
-    
-    def open_edit_window(self, event=None):
-        selected = self.tree.selection()
-        if not selected:
-            messagebox.showwarning("Cảnh báo", "Vui lòng chọn xe cần sửa")
+        """Tìm kiếm (Sửa lỗi không tìm kiếm được)"""
+        kw = self.search_entry.get().strip().lower()
+        if not kw:
+            self.load_data()
             return
         
-        xe = self.tree.item(selected[0])['values']
-        self.open_form_window("Sửa thông tin xe", xe)
-    
-    def open_form_window(self, title, data=None):
-        window = tk.Toplevel(self)
-        window.title(title)
-        window.geometry("500x450")
-        window.grab_set()
+        # Gọi controller tìm kiếm
+        results = self.controller.search(kw)
+        self.render_table(results)
+        if not results:
+            messagebox.showinfo("Kết quả", "Không tìm thấy xe phù hợp")
+
+    def delete_car(self, car_id):
+        """Xóa xe (Sửa lỗi không xóa được)"""
+        if messagebox.askyesno("Xác nhận", f"Bạn có chắc muốn xóa xe ID: {car_id}?"):
+            # CHÚ Ý: Đảm bảo controller.delete nhận tham số là INT
+            success = self.controller.delete(int(car_id))
+            if success:
+                messagebox.showinfo("Thành công", "Đã xóa xe khỏi hệ thống")
+                self.load_data() # Load lại bảng ngay lập tức
+                if self.on_refresh: self.on_refresh()
+            else:
+                messagebox.showerror("Lỗi", "Không thể xóa. Xe này có thể đang liên quan đến hóa đơn.")
+
+    def save_car(self):
+        """Lưu hoặc cập nhật xe"""
+        data = {k: v.get().strip() for k, v in self.entries.items()}
         
-        frame = ttk.Frame(window, padding="20")
-        frame.pack(fill="both", expand=True)
-        
-        # Các trường nhập liệu
-        fields = {}
-        labels = ["Biển số:", "Hiệu xe:", "Model:", "Màu sắc:", "Năm sản xuất:", "ID khách hàng:"]
-        
-        for i, label in enumerate(labels):
-            ttk.Label(frame, text=label).grid(row=i, column=0, sticky="w", pady=5)
-            entry = ttk.Entry(frame, width=40)
-            entry.grid(row=i, column=1, pady=5, padx=10)
-            fields[label] = entry
-            
-            if data and i < len(data) - 1:
-                entry.insert(0, data[i+1] if i+1 < len(data) else "")
-        
-        # Combobox chọn khách hàng (có thể thay thế bằng combobox)
-        ttk.Label(frame, text="Hoặc chọn từ danh sách:").grid(row=6, column=0, pady=5)
-        kh_combo = ttk.Combobox(frame, width=37)
-        kh_combo.grid(row=6, column=1, pady=5)
-        
-        # Load danh sách khách hàng (cần controller khách hàng)
-        # Tạm thời bỏ qua phần này, yêu cầu nhập ID thủ công
-        
-        def save():
-            bien_so = fields["Biển số:"].get().strip()
-            hieu_xe = fields["Hiệu xe:"].get().strip()
-            model = fields["Model:"].get().strip()
-            mau_sac = fields["Màu sắc:"].get().strip()
-            nam_sx = fields["Năm sản xuất:"].get().strip()
-            id_kh = fields["ID khách hàng:"].get().strip()
-            
-            if not bien_so or not hieu_xe or not id_kh:
-                messagebox.showerror("Lỗi", "Biển số, hiệu xe và ID khách hàng không được để trống")
-                return
-            
-            try:
-                id_kh = int(id_kh)
-                nam_sx = int(nam_sx) if nam_sx else 0
-            except ValueError:
-                messagebox.showerror("Lỗi", "ID khách hàng và năm sản xuất phải là số")
-                return
-            
-            if data:  # Sửa
-                if self.controller.update(data[0], bien_so, hieu_xe, model, mau_sac, nam_sx, id_kh):
-                    messagebox.showinfo("Thành công", "Cập nhật xe thành công")
-                    self.load_data()
-                    window.destroy()
-                else:
-                    messagebox.showerror("Lỗi", "Cập nhật thất bại")
-            else:  # Thêm mới
-                if self.controller.add(bien_so, hieu_xe, model, mau_sac, nam_sx, id_kh):
-                    messagebox.showinfo("Thành công", "Thêm xe thành công")
-                    self.load_data()
-                    window.destroy()
-                else:
-                    messagebox.showerror("Lỗi", "Thêm xe thất bại")
-        
-        ttk.Button(frame, text="Lưu", command=save).grid(row=7, column=0, columnspan=2, pady=20)
-    
-    def delete(self):
-        selected = self.tree.selection()
-        if not selected:
-            messagebox.showwarning("Cảnh báo", "Vui lòng chọn xe cần xóa")
+        if not data['bien_so'] or not data['hieu_xe'] or not data['id_khach_hang']:
+            messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập đủ các trường có dấu *")
             return
-        
-        if messagebox.askyesno("Xác nhận", "Bạn có chắc muốn xóa xe này?"):
-            xe = self.tree.item(selected[0])['values']
-            if self.controller.delete(xe[0]):
-                messagebox.showinfo("Thành công", "Xóa xe thành công")
+
+        try:
+            if self.current_car_id:
+                success = self.controller.update(self.current_car_id, **data)
+            else:
+                success = self.controller.add(**data)
+            
+            if success:
+                messagebox.showinfo("Thành công", "Dữ liệu xe đã được lưu")
+                self.hide_form()
                 self.load_data()
             else:
-                messagebox.showerror("Lỗi", "Xóa xe thất bại")
+                messagebox.showerror("Lỗi", "Lỗi thực thi Database")
+        except Exception as e:
+            messagebox.showerror("Lỗi", f"Sai định dạng dữ liệu: {e}")
+
+    # --- ĐIỀU KHIỂN HIỂN THỊ ---
+
+    def show_add_form(self):
+        self.current_car_id = None
+        self.form_title.configure(text="➕ THÊM XE MỚI")
+        for e in self.entries.values(): e.delete(0, 'end')
+        self.table_frame.pack_forget()
+        self.form_frame.pack(fill="both", expand=True)
+
+    def show_edit_form(self, xe):
+        self.current_car_id = xe['id']
+        self.form_title.configure(text="✏️ SỬA THÔNG TIN XE")
+        for key in self.entries.keys():
+            self.entries[key].delete(0, 'end')
+            val = xe.get(key, "")
+            self.entries[key].insert(0, str(val) if val is not None else "")
+        self.table_frame.pack_forget()
+        self.form_frame.pack(fill="both", expand=True)
+
+    def hide_form(self):
+        self.form_frame.pack_forget()
+        self.table_frame.pack(fill="both", expand=True)
