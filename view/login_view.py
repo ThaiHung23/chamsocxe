@@ -66,7 +66,7 @@ class LoginView:
             font=ctk.CTkFont(size=14)
         )
         self.username_entry.pack(fill="x", pady=(5, 0))
-        self.username_entry.insert(0, "admin")  # Thêm giá trị mặc định để test
+        # self.username_entry.insert(0, "admin")  # Thêm giá trị mặc định để test
         
         # Password
         password_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
@@ -81,7 +81,7 @@ class LoginView:
             font=ctk.CTkFont(size=14)
         )
         self.password_entry.pack(fill="x", pady=(5, 0))
-        self.password_entry.insert(0, "123456")  # Thêm giá trị mặc định để test
+        # self.password_entry.insert(0, "123456")  # Thêm giá trị mặc định để test
         
         # Bind Enter key
         self.password_entry.bind("<Return>", lambda e: self.login())
@@ -143,7 +143,7 @@ class LoginView:
         
         if user:
             print(f"Đăng nhập thành công: {user['ho_ten']}")
-            messagebox.showinfo("Thành công", f"Chào mừng {user['ho_ten']}!")
+            # messagebox.showinfo("Thành công", f"Chào mừng {user['ho_ten']}!")
             self.root.destroy()
             self.on_login_success(user)
         else:
