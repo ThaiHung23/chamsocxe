@@ -67,3 +67,11 @@ class HoaDonController:
             import traceback
             traceback.print_exc()
             return []
+        
+    def get_by_khach_hang(self, khach_hang_id):
+        """Lấy danh sách hóa đơn theo ID khách hàng"""
+        try:
+            return self.model.get_by_khach_hang(khach_hang_id)
+        except Exception as e:
+            print(f"Lỗi lấy hóa đơn theo khách hàng: {e}")
+            return []

@@ -40,3 +40,10 @@ class XeController:
         except Exception as e:
             print(f"Lỗi xóa: {e}")
             return False
+        
+    def get_by_khach_hang(self, kh_id):
+        try:
+            return self.model.get_by_khach_hang(kh_id)
+        except Exception as e:
+            print(f"Lỗi lấy xe theo khách hàng: {e}")
+            return []

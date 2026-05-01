@@ -69,6 +69,39 @@ CREATE TABLE IF NOT EXISTS nguoi_dung (
     trang_thai BOOLEAN DEFAULT TRUE
 );
 
+CREATE TABLE dat_lich (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    khach_hang_id INT,
+    xe_id INT,
+    dich_vu_id INT,
+    ngay_hen DATETIME,
+    ghi_chu TEXT,
+    trang_thai VARCHAR(50) DEFAULT 'Chờ xác nhận',
+    FOREIGN KEY (khach_hang_id) REFERENCES khach_hang(id),
+    FOREIGN KEY (xe_id) REFERENCES xe(id),
+    FOREIGN KEY (dich_vu_id) REFERENCES dich_vu(id)
+);
+
+-- Chạy file này để tạo bảng tài khoản khách hàng
+CREATE TABLE IF NOT EXISTS tai_khoan_khach_hang (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    id_khach_hang INT,
+    trang_thai BOOLEAN DEFAULT TRUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_khach_hang) REFERENCES khach_hang(id) ON DELETE CASCADE
+);
+
+-- Thêm tài khoản khách hàng test (mật khẩu: 123456)
+-- SHA256 của '123456' là: 8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92
+INSERT INTO tai_khoan_khach_hang (username, password, id_khach_hang) VALUES
+('khach1', '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', 1);
+
+-- Nếu chưa có khách hàng nào, thêm khách hàng mẫu
+INSERT IGNORE INTO khach_hang (id, ma_kh, ho_ten, so_dien_thoai) VALUES
+(1, 'KH001', 'Nguyễn Văn A', '0901234567');
+
 -- Thêm dữ liệu mẫu
 INSERT INTO dich_vu (ma_dv, ten_dich_vu, don_gia, thoi_gian_du_kien) VALUES
 ('DV001', 'Rửa xe', 50000, 30),

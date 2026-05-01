@@ -158,3 +158,19 @@ class HoaDonModel:
             import traceback
             traceback.print_exc()
             return []
+        
+    def get_by_khach_hang(self, khach_hang_id):
+        """Lấy danh sách hóa đơn theo ID khách hàng"""
+        query = """
+            SELECT hd.*, xe.bien_so, kh.ho_ten as ten_chu_xe,
+                (SELECT GROUP_CONCAT(dv.ten_dich_vu SEPARATOR ', ') 
+                    FROM chi_tiet_hoa_don ct 
+                    JOIN dich_vu dv ON ct.id_dich_vu = dv.id 
+                    WHERE ct.id_hoa_don = hd.id) as danh_sach_dich_vu
+            FROM hoa_don hd
+            LEFT JOIN xe ON hd.id_xe = xe.id
+            LEFT JOIN khach_hang kh ON xe.id_khach_hang = kh.id
+            WHERE kh.id = %s
+            ORDER BY hd.ngay_lap DESC
+        """
+        return self.db.fetch_all(query, (khach_hang_id,))

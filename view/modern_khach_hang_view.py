@@ -77,7 +77,7 @@ class ModernKhachHangView:
         self.table_frame.pack(fill="both", expand=True)
         
         self.headers = ["ID", "Mã KH", "Họ tên", "Số điện thoại", "Email", "Địa chỉ", "Ngày tạo", "Thao tác"]
-        self.column_widths = [20, 120, 120, 110, 180, 200, 105, 130]
+        self.column_widths = [10, 120, 120, 100, 180, 200, 95, 130]
         
         for i, (header, width) in enumerate(zip(self.headers, self.column_widths)):
             lbl = ctk.CTkLabel(self.table_frame, text=header, font=ctk.CTkFont(size=13, weight="bold"),

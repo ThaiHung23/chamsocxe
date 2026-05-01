@@ -66,7 +66,7 @@ class LoginView:
             font=ctk.CTkFont(size=14)
         )
         self.username_entry.pack(fill="x", pady=(5, 0))
-        self.username_entry.insert(0, "admin")  # Thêm giá trị mặc định để test
+        # self.username_entry.insert(0, "admin")  # Thêm giá trị mặc định để test
         
         # Password
         password_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
@@ -81,7 +81,7 @@ class LoginView:
             font=ctk.CTkFont(size=14)
         )
         self.password_entry.pack(fill="x", pady=(5, 0))
-        self.password_entry.insert(0, "123456")  # Thêm giá trị mặc định để test
+        # self.password_entry.insert(0, "123456")  # Thêm giá trị mặc định để test
         
         # Bind Enter key
         self.password_entry.bind("<Return>", lambda e: self.login())
@@ -122,37 +122,78 @@ class LoginView:
         footer_label.pack(side="bottom", pady=20)
     
     def login(self):
-        """Xử lý đăng nhập"""
         username = self.username_entry.get().strip()
         password = self.password_entry.get().strip()
-        
-        print(f"Đang đăng nhập với username: {username}")
-        print(f"Mật khẩu nhập: {password}")
         
         if not username or not password:
             messagebox.showerror("Lỗi", "Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu")
             return
         
-        # Hash mật khẩu
         hashed_password = Database.hash_password(password)
-        print(f"Mật khẩu đã hash: {hashed_password}")
+        print(f"DEBUG: Username: {username}")
+        print(f"DEBUG: Hashed password: {hashed_password}")
         
-        # Kiểm tra đăng nhập
-        query = "SELECT * FROM nguoi_dung WHERE username = %s AND password = %s AND trang_thai = 1"
-        user = self.db.fetch_one(query, (username, hashed_password))
+        # 1. Kiểm tra đăng nhập admin/nhân viên
+        query_staff = """
+            SELECT id, username, ho_ten, vai_tro, trang_thai 
+            FROM nguoi_dung 
+            WHERE username = %s AND password = %s AND trang_thai = 1
+        """
+        staff = self.db.fetch_one(query_staff, (username, hashed_password))
+        print(f"DEBUG: Staff query result: {staff}")
         
-        if user:
-            print(f"Đăng nhập thành công: {user['ho_ten']}")
-            # messagebox.showinfo("Thành công", f"Chào mừng {user['ho_ten']}!")
+        if staff:
+            # Tạo user object cho staff
+            user = {
+                'id': staff['id'],
+                'username': staff['username'],
+                'ho_ten': staff['ho_ten'],
+                'vai_tro': staff['vai_tro'],
+                'user_type': 'staff'  # Quan trọng: đánh dấu là staff
+            }
+            print(f"DEBUG: Staff login success: {user}")
             self.root.destroy()
             self.on_login_success(user)
-        else:
-            # Debug: Kiểm tra xem user có tồn tại không
-            check_user = self.db.fetch_one("SELECT * FROM nguoi_dung WHERE username = %s", (username,))
-            if check_user:
-                print(f"Tìm thấy user nhưng sai mật khẩu. Hash trong DB: {check_user['password']}")
-                print(f"Hash nhập vào: {hashed_password}")
-            else:
-                print(f"Không tìm thấy user: {username}")
-            
-            messagebox.showerror("Lỗi", "Tên đăng nhập hoặc mật khẩu không đúng")
+            return
+        
+        # 2. Kiểm tra đăng nhập khách hàng
+        query_customer = """
+            SELECT 
+                tk.id as tk_id,
+                tk.username,
+                tk.id_khach_hang,
+                kh.id as kh_id,
+                kh.ma_kh,
+                kh.ho_ten,
+                kh.so_dien_thoai,
+                kh.email,
+                kh.dia_chi,
+                kh.ngay_tao
+            FROM tai_khoan_khach_hang tk
+            INNER JOIN khach_hang kh ON tk.id_khach_hang = kh.id
+            WHERE tk.username = %s AND tk.password = %s AND tk.trang_thai = 1
+        """
+        customer_data = self.db.fetch_one(query_customer, (username, hashed_password))
+        print(f"DEBUG: Customer query result: {customer_data}")
+        
+        if customer_data:
+            # Tạo user object cho customer
+            user = {
+                'id': customer_data['kh_id'],  # ID khách hàng
+                'tk_id': customer_data['tk_id'],
+                'username': customer_data['username'],
+                'ho_ten': customer_data['ho_ten'],
+                'so_dien_thoai': customer_data['so_dien_thoai'],
+                'email': customer_data.get('email', ''),
+                'dia_chi': customer_data.get('dia_chi', ''),
+                'ma_kh': customer_data.get('ma_kh', ''),
+                'user_type': 'customer'  # Quan trọng: đánh dấu là customer
+            }
+            print(f"DEBUG: Customer login success: {user}")
+            print(f"DEBUG: user_type = {user['user_type']}")
+            self.root.destroy()
+            self.on_login_success(user)
+            return
+        
+        print("DEBUG: Login failed - No matching user found")
+        messagebox.showerror("Lỗi", "Tên đăng nhập hoặc mật khẩu không đúng")
